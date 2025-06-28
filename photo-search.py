@@ -25,13 +25,45 @@ TODO: Turn it into a docker image that includes the model so it doesn't depend o
 db_name = 'IMAGE_DB'
 image_files_list_filename = 'image_files_list.txt'
 
+# https://huggingface.co/laion/CLIP-ViT-B-32-laion2B-s34B-b79K/tree/main
+local_model_path = "C:/Users/markv/Code/python/models/open_clip_pytorch_model.bin"
+
+
 # btw open_clip saves this model in ~/.cache/huggingface/hub 
-model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained=local_model_path)
 model.eval()  # model in train mode by default, impacts some models with BatchNorm or stochastic depth active (i dont know what this means :D)
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
 client = chromadb.PersistentClient(path='.') # creates the database in the folder you run this
-collection = client.get_or_create_collection(name=db_name)
+
+"""
+TODO: play arount with these settings
+
+Configuring Chroma Collections
+
+You can configure the embedding space, HNSW index parameters, and embedding function of a collection by setting the collection configuration. These configurations will help you customize your Chroma collections for different data, accuracy and performance requirements.
+
+The space parameter defines the distance function of the embedding space. The default is l2 (squared L2 norm), and other possible values are cosine (cosine similarity), and ip (inner product).
+Distance	parameter	Equation
+Squared L2	               d =  \sum\left(A_i-B_i\right)^2 
+Inner product	            d = 1.0 - \sum\left(A_i \times B_i\right) 
+Cosine similarity	cosine	d = 1.0 - \frac{\sum\left(A_i \times B_i\right)}{\sqrt{\sum\left(A_i^2\right)} \cdot \sqrt{\sum\left(B_i^2\right)}} 
+
+SW Index Configuration#
+
+The HNSW index parameters include:
+
+    ef_construction determines the size of the candidate list used to select neighbors during index creation. A higher value improves index quality at the cost of more memory and time, while a lower value speeds up construction with reduced accuracy. The default value is 100.
+    ef_search determines the size of the dynamic candidate list used while searching for the nearest neighbors. A higher value improves recall and accuracy by exploring more potential neighbors but increases query time and computational cost, while a lower value results in faster but less accurate searches. The default value is 100.
+    max_neighbors is the maximum number of neighbors (connections) that each node in the graph can have during the construction of the index. A higher value results in a denser graph, leading to better recall and accuracy during searches but increases memory usage and construction time. A lower value creates a sparser graph, reducing memory usage and construction time but at the cost of lower search accuracy and recall. The default value is 16.
+    num_threads specifies the number of threads to use during index construction or search operations. The default value is multiprocessing.cpu_count() (available CPU cores).
+    batch_size controls the number of vectors to process in each batch during index operations. The default value is 100.
+    sync_threshold determines when to synchronize the index with persistent storage. The default value is 1000.
+    resize_factor controls how much the index grows when it needs to be resized. The default value is 1.2.
+"""
+
+# I guess cosine is supposed to be better but not seeing much difference.
+collection = client.get_or_create_collection(name=db_name, configuration={"hnsw":{"space": "cosine"}})
 
 
 def create_file_index(start_dir='.'):
@@ -76,7 +108,7 @@ def save_embeddings_in_vectordatabase():
          image_bytes = get_bytes(image_path)
          embedding = generate_embedding(image_bytes)
          if embedding:
-            print(f"Successfully generated embeddings for '{image_path}'")
+            #print(f"Successfully generated embeddings for '{image_path}'")
             if (embed_in_chroma(image_path, embedding)):
                succeeded = succeeded + 1
          else:
@@ -101,7 +133,7 @@ def get_bytes(image_path):
       with open(abs_image_path, 'rb') as image_file:
          image_bytes = image_file.read()
         
-      print(f"Successfully read {len(image_bytes)} bytes from '{abs_image_path}'")
+      #print(f"Successfully read {len(image_bytes)} bytes from '{abs_image_path}'")
 
       return image_bytes
 
@@ -124,7 +156,7 @@ def generate_embedding(bytes):
          image_features = model.encode_image(image)
          image_features /= image_features.norm(dim=-1, keepdim=True)
          embeddings = image_features.cpu().numpy().tolist()
-         print("Embeddings generated successfully.")
+         #print("Embeddings generated successfully.")
       except Exception as e:
          print(f"Error generating embeddings: {e}")
          raise
@@ -148,7 +180,7 @@ def embed_in_chroma(filename, embedding):
         #items = collection.get()
         #print(items)
 
-        print(f"Added embedding to Chroma for {filename}")
+        #print(f"Added embedding to Chroma for {filename}")
         return True
     except Exception as e:
         # Log an error if the addition to Chroma fails
