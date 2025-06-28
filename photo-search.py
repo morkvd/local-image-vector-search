@@ -8,109 +8,93 @@ import chromadb
 import argparse
 
 db_name = 'IMAGE_DB'
+image_files_list_filename = 'image_files_list.txt'
 
 model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
-model.eval()  # model in train mode by default, impacts some models with BatchNorm or stochastic depth active
+model.eval()  # model in train mode by default, impacts some models with BatchNorm or stochastic depth active (i dont know what this means :D)
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
-client = chromadb.PersistentClient(path='.')
+client = chromadb.PersistentClient(path='.') # creates the database in the folder you run this
 collection = client.get_or_create_collection(name=db_name)
 
+
 def create_file_index(start_dir='.'):
-   image_extensions = [
-      '.jpg', '.jpeg', '.png', '.gif', '.bmp',
-      '.tiff', '.tif', '.webp', '.svg', '.heic'
-   ]
-    
-   image_files = []
-    
-   # Walk through all directories starting from start_dir
-   for root, dirs, files in os.walk(start_dir):
+   image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.svg', '.heic']
+
+   # gather files in directory (and subdirectories) 
+   image_files = [] 
+   for root, _, files in os.walk(start_dir):
       for file in files:
-         # Check if the file has an image extension
          if any(file.lower().endswith(ext) for ext in image_extensions):
-            # Get the full path
             full_path = os.path.join(root, file)
-            # Convert to relative path
             rel_path = os.path.relpath(full_path, start_dir)
             image_files.append(rel_path)
     
-   # Sort the list for better readability
+   # write to file    
    image_files.sort()
-    
-   # Create output filename
-   output_file = 'image_files_list.txt'
-    
-   # Write the list to a text file
-   with open(output_file, 'w', encoding='utf-8') as f:
+   with open(image_files_list_filename, 'w', encoding='utf-8') as f:
       for image_file in image_files:
          f.write(f"{image_file}\n")
     
    print(f"Found {len(image_files)} image files.")
-   print(f"List saved to: {output_file}")
+   print(f"List saved to: {image_files_list_filename}")
 
 
 def save_embeddings_in_vectordatabase():
-   # Path to the image list file
-   image_list_path = 'image_files_list.txt'
-    
    # Check if the image list file exists
-   if not os.path.isfile(image_list_path):
-      print(f"Error: The file '{image_list_path}' does not exist.")
+   if not os.path.isfile(image_files_list_filename):
+      print(f"Error: The file '{image_files_list_filename}' does not exist.")
       return 1
     
    # Read the image list
    try:
-      with open(image_list_path, 'r', encoding='utf-8') as f:
+      with open(image_files_list_filename, 'r', encoding='utf-8') as f:
          image_paths = [line.strip() for line in f if line.strip()]
         
       print(f"Found {len(image_paths)} images in the list.")
      
       # Process each image
-      results = []
+      succeeded = 0
       for i, image_path in enumerate(image_paths):
          print(f"\nProcessing image {i+1}/{len(image_paths)}: {image_path}")
-         embedding = process_image(image_path)
+         image_bytes = get_bytes(image_path)
+         embedding = generate_embedding(image_bytes)
          if embedding:
             print(f"Successfully generated embeddings for '{image_path}'")
-            embed_in_chroma(image_path, embedding)
+            if (embed_in_chroma(image_path, embedding)):
+               succeeded = succeeded + 1
          else:
             print(f"Failed to generate embeddings for '{image_path}'")
         
-      print(f"\nProcessed {len(results)} images successfully out of {len(image_paths)} total.")
+      print(f"\nProcessed {succeeded} images successfully out of {len(image_paths)} total.")
       return 0
+
    except Exception as e:
       print(f"Error processing images: {e}")
       return 1
 
-def process_image(image_path):
-   """Process a single image and generate embeddings"""
-   # Convert relative path to absolute path
+def get_bytes(image_path):
    abs_image_path = os.path.abspath(image_path)
     
-   # Check if the file exists
    if not os.path.isfile(abs_image_path):
       print(f"Error: The file '{image_path}' does not exist.")
       print(f"Absolute path: '{abs_image_path}'")
       return None
-    
-   # Read the image bytes
+
    try:
       with open(abs_image_path, 'rb') as image_file:
          image_bytes = image_file.read()
         
-      # Print information about the bytes read
-      print(f"Successfully read {len(image_bytes)} bytes from '{image_path}'")
-      print(f"Absolute path: '{abs_image_path}'")
-        
-      # Generate embeddings for the image
-      return classify_file(image_bytes)
+      print(f"Successfully read {len(image_bytes)} bytes from '{abs_image_path}'")
+
+      return image_bytes
+
    except Exception as e:
       print(f"Error reading the image: {e}")
       return None
 
 
-def classify_file(bytes):
+def generate_embedding(bytes):
    try:
       image = Image.open(io.BytesIO(bytes))
       image = preprocess(image).unsqueeze(0)  # Process image, then move and convert
@@ -149,9 +133,11 @@ def embed_in_chroma(filename, embedding):
         #print(items)
 
         print(f"Added embedding to Chroma for {filename}")
+        return True
     except Exception as e:
         # Log an error if the addition to Chroma fails
         print(f"Failed to add embedding to Chroma for {filename}: {e}")
+        return False
 
 
 
