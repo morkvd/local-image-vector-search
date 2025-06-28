@@ -27,10 +27,11 @@ image_files_list_filename = 'image_files_list.txt'
 
 # https://huggingface.co/laion/CLIP-ViT-B-32-laion2B-s34B-b79K/tree/main
 local_model_path = "C:/Users/markv/Code/python/models/open_clip_pytorch_model.bin"
-
+remote_model_name = 'laion2b_s34b_b79k'
+use_local_model = True
 
 # btw open_clip saves this model in ~/.cache/huggingface/hub 
-model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained=local_model_path)
+model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained=local_model_path if use_local_model else remote_model_name)
 model.eval()  # model in train mode by default, impacts some models with BatchNorm or stochastic depth active (i dont know what this means :D)
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
