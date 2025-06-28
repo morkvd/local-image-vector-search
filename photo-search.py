@@ -7,9 +7,25 @@ import io
 import chromadb
 import argparse
 
+"""
+1. place this script in the root folder of the directory structure you want to search through
+2. run `python .\photo-search.py index` to:
+   - go through all images in this directory structure
+   - turn them into vectors
+   - save these into a local sqlite database
+   (this may take a while)
+3. after that you can run `python .\photo-search.py search "green goblin"`
+   to open the N amount of photos that match your search term.
+
+TODO: Conda this shit so it uses the same packages wherever it is executed
+TODO: Turn it into a docker image that includes the model so it doesn't depend on huggingface existing. 
+
+"""
+
 db_name = 'IMAGE_DB'
 image_files_list_filename = 'image_files_list.txt'
 
+# btw open_clip saves this model in ~/.cache/huggingface/hub 
 model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 model.eval()  # model in train mode by default, impacts some models with BatchNorm or stochastic depth active (i dont know what this means :D)
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
