@@ -164,25 +164,22 @@ def build_index():
 def search_files(search_string, num_results):
    print("searching for: ", search_string)
 
-   # Split search string into words if it contains multiple words
-   search_words = search_string.split()
-
    items = collection.get()
    #print(items)
    print(len(items["ids"]), " images in database")
     
-   # Tokenize the search words
-   text = tokenizer(search_words)
-    
+   # Tokenize the entire search string as a single unit
+   text = tokenizer([search_string])
+   
    with torch.no_grad():
       text_features = model.encode_text(text)
       text_features /= text_features.norm(dim=-1, keepdim=True)
-      embeddings = text_features.cpu().numpy().tolist()
+      embedding = text_features.cpu().numpy().tolist()
     
-   print(len(embeddings))
+   print("Created single embedding for the entire search string")
 
-   # Use the specified number of results
-   results = collection.query(query_embeddings=embeddings, n_results=(num_results))
+   # Use the specified number of results with a single embedding
+   results = collection.query(query_embeddings=embedding, n_results=(num_results))
     
    for ids in results["ids"]:
       for id in ids:
