@@ -170,6 +170,8 @@ def search_files(search_string, num_results):
    for ids in results["ids"]:
       for id in ids:
          print(id)
+         os.startfile(id)
+
 
 
 def main():
